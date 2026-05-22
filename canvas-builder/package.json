@@ -1,0 +1,17 @@
+{
+  "name": "tldraw-builder",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tldraw": "^2.4.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2",
+    "vite-plugin-singlefile": "^2.0.1"
+  }
+}
