@@ -1,0 +1,28 @@
+{
+    "active_lesson": 0,
+    "lesson_completed": [
+        false,
+        false,
+        false,
+        false
+    ],
+    "onboarding_step": 4,
+    "quest_chart_added": false,
+    "quest_indicator_added": false,
+    "quest_note_saved": false,
+    "quest_trade_placed": false,
+    "quest_whiteboard_opened": true,
+    "quiz_answers": [
+        -1,
+        -1,
+        -1,
+        -1
+    ],
+    "quiz_submitted": [
+        false,
+        false,
+        false,
+        false
+    ],
+    "show_learning": true
+}
