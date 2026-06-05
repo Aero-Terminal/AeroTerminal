@@ -7,7 +7,7 @@ A High-Performance Native Workspace and Decision Intelligence System for Discret
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![WebView2](https://img.shields.io/badge/WebView2-Evergreen-blue?logo=microsoftedge)](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
 
-[Website](https://landing-page-aeroterminal.vercel.app/) · [Download](https://github.com/Aero-Terminal/AeroTerminal/releases/download/v1.0.0/AeroTerminal.exe) · [License](#license) · [Discussions](https://github.com/Aero-Terminal/AeroTerminal/discussions)
+[Website](https://landing-page-aeroterminal.vercel.app/) · [Releases](https://github.com/Aero-Terminal/AeroTerminal/releases) · [License](#license) · [Discussions](https://github.com/Aero-Terminal/AeroTerminal/discussions)
 
 ---
 
@@ -36,7 +36,7 @@ AeroTerminal is a native C++17 desktop workspace designed to eliminate the fragm
 
 To deploy the pre-compiled binary:
 
-1. Download the executable bundle from the [Releases page](https://github.com/Aero-Terminal/AeroTerminal/releases/tag/v1.0.0).
+1. Download the executable bundle from the [Releases page](https://github.com/Aero-Terminal/AeroTerminal/releases).
 2. Ensure both **AeroTerminal.exe** and **WebView2Loader.dll** are in the same folder.
 3. Double-click **AeroTerminal.exe** to run.
 
