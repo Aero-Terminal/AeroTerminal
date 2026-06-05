@@ -26,7 +26,11 @@
 #define WEBVIEW_H
 
 #ifndef WEBVIEW_API
+#ifdef __cplusplus
+#define WEBVIEW_API inline
+#else
 #define WEBVIEW_API extern
+#endif
 #endif
 
 #ifndef WEBVIEW_VERSION_MAJOR
@@ -1233,7 +1237,7 @@ auto parse_version(const T (&version)[Length]) noexcept {
   return parse_version(std::basic_string<T>(version, Length));
 }
 
-std::wstring get_file_version_string(const std::wstring &file_path) noexcept {
+inline std::wstring get_file_version_string(const std::wstring &file_path) noexcept {
   DWORD dummy_handle; // Unused
   DWORD info_buffer_length =
       GetFileVersionInfoSizeW(file_path.c_str(), &dummy_handle);
@@ -1945,6 +1949,10 @@ static constexpr auto message_received =
 static constexpr auto permission_requested =
     cast_info_t<ICoreWebView2PermissionRequestedEventHandler>{
         IID_ICoreWebView2PermissionRequestedEventHandler};
+
+static constexpr auto new_window_requested =
+    cast_info_t<ICoreWebView2NewWindowRequestedEventHandler>{
+        IID_ICoreWebView2NewWindowRequestedEventHandler};
 } // namespace cast_info
 } // namespace mswebview2
 
@@ -1952,7 +1960,8 @@ class webview2_com_handler
     : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
       public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
       public ICoreWebView2WebMessageReceivedEventHandler,
-      public ICoreWebView2PermissionRequestedEventHandler {
+      public ICoreWebView2PermissionRequestedEventHandler,
+      public ICoreWebView2NewWindowRequestedEventHandler {
   using webview2_com_handler_cb_t =
       std::function<void(ICoreWebView2Controller *, ICoreWebView2 *webview)>;
 
@@ -1994,7 +2003,8 @@ public:
     if (cast_if_equal_iid(riid, controller_completed, ppv) ||
         cast_if_equal_iid(riid, environment_completed, ppv) ||
         cast_if_equal_iid(riid, message_received, ppv) ||
-        cast_if_equal_iid(riid, permission_requested, ppv)) {
+        cast_if_equal_iid(riid, permission_requested, ppv) ||
+        cast_if_equal_iid(riid, new_window_requested, ppv)) {
       return S_OK;
     }
 
@@ -2030,6 +2040,7 @@ public:
     controller->get_CoreWebView2(&webview);
     webview->add_WebMessageReceived(this, &token);
     webview->add_PermissionRequested(this, &token);
+    webview->add_NewWindowRequested(this, &token);
 
     m_cb(controller, webview);
     return S_OK;
@@ -2051,6 +2062,18 @@ public:
     args->get_PermissionKind(&kind);
     if (kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ) {
       args->put_State(COREWEBVIEW2_PERMISSION_STATE_ALLOW);
+    }
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE
+  Invoke(ICoreWebView2 *sender,
+         ICoreWebView2NewWindowRequestedEventArgs *args) {
+    args->put_Handled(TRUE);
+    LPWSTR uri = nullptr;
+    args->get_Uri(&uri);
+    if (uri) {
+      sender->Navigate(uri);
+      CoTaskMemFree(uri);
     }
     return S_OK;
   }
@@ -2117,7 +2140,7 @@ private:
 
 class win32_edge_engine {
 public:
-  win32_edge_engine(bool debug, void *window) {
+  win32_edge_engine(bool debug, void *window, const std::wstring& udf_suffix = L"") {
     if (!is_webview2_available()) {
       return;
     }
@@ -2230,7 +2253,7 @@ public:
     auto cb =
         std::bind(&win32_edge_engine::on_message, this, std::placeholders::_1);
 
-    embed(m_window, debug, cb);
+    embed(m_window, debug, cb, udf_suffix);
     resize_widget();
     if (m_controller) {
       m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
@@ -2354,7 +2377,7 @@ public:
   }
 
 private:
-  bool embed(HWND wnd, bool debug, msg_cb_t cb) {
+  bool embed(HWND wnd, bool debug, msg_cb_t cb, const std::wstring& udf_suffix = L"") {
     std::atomic_flag flag = ATOMIC_FLAG_INIT;
     flag.test_and_set();
 
@@ -2368,7 +2391,12 @@ private:
       return false;
     }
     wchar_t userDataFolder[MAX_PATH];
-    PathCombineW(userDataFolder, dataPath, currentExeName);
+    if (udf_suffix.empty()) {
+      PathCombineW(userDataFolder, dataPath, currentExeName);
+    } else {
+      std::wstring customFolder = std::wstring(currentExeName) + L"_" + udf_suffix;
+      PathCombineW(userDataFolder, dataPath, customFolder.c_str());
+    }
 
     m_com_handler = new webview2_com_handler(
         wnd, cb,
@@ -2491,8 +2519,8 @@ namespace webview {
 
 class webview : public browser_engine {
 public:
-  webview(bool debug = false, void *wnd = nullptr)
-      : browser_engine(debug, wnd) {}
+  webview(bool debug = false, void *wnd = nullptr, const std::wstring& udf_suffix = L"")
+      : browser_engine(debug, wnd, udf_suffix) {}
 
   void navigate(const std::string &url) {
     if (url.empty()) {

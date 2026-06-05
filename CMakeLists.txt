@@ -97,6 +97,7 @@ set(PROJECT_SRCS
     src/ui/widgets/PanelJournal.cpp
     src/ui/widgets/PanelCalendar.cpp
     src/ui/widgets/PanelWhiteboard.cpp
+    src/ui/widgets/PanelAlgoTrading.cpp
     src/ui/widgets/PanelOrderBook.cpp
     src/ui/widgets/PanelTrades.cpp
     src/ui/widgets/PanelScreener.cpp
@@ -115,8 +116,9 @@ if(WIN32)
     target_compile_definitions(AeroTerminal PRIVATE UNICODE _UNICODE)
 endif()
 
-# Copy fonts to build directory so they are easily accessible by the executable
+# Copy fonts and WebView2Loader.dll to build directory so they are easily accessible by the executable
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/fonts" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/WebView2Loader.dll" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
 # Link libraries
 target_link_libraries(AeroTerminal PRIVATE
@@ -134,6 +136,7 @@ if(WIN32)
         uuid
         version
         shlwapi
+        crypt32
     )
 endif()
 

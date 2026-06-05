@@ -5,6 +5,7 @@
 #include "ui/widgets/PanelJournal.h"
 #include "ui/widgets/PanelCalendar.h"
 #include "ui/widgets/PanelWhiteboard.h"
+#include "ui/widgets/PanelAlgoTrading.h"
 #include "ui/widgets/PanelOrderBook.h"
 #include "ui/widgets/PanelTrades.h"
 #include "ui/widgets/PanelScreener.h"
@@ -101,15 +102,25 @@ bool WindowFrame::Initialize(int width, int height, const char* title)
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
     ImGui_ImplOpenGL3_Init(m_glsl_version);
 
-    // 5. Load Fonts & Icons
-    io.Fonts->AddFontFromFileTTF("fonts/Roboto-Regular.ttf", 15.0f);
+    // 5. Load Fonts & Icons gracefully with fallbacks
+    ImFont* main_font = io.Fonts->AddFontFromFileTTF("fonts/Roboto-Regular.ttf", 15.0f);
+    if (!main_font) {
+        io.Fonts->AddFontDefault();
+        std::cerr << "[AeroTerminal] Warning: fonts/Roboto-Regular.ttf not found. Loaded default ImGui font." << std::endl;
+    }
     
-    // Merge FontAwesome icons
-    static const ImWchar icons_ranges[] = { 0xe000, 0xf8ff, 0 };
-    ImFontConfig icons_config;
-    icons_config.MergeMode = true;
-    icons_config.PixelSnapH = true;
-    io.Fonts->AddFontFromFileTTF("fonts/Font Awesome 6 Free-Solid-900.otf", 14.0f, &icons_config, icons_ranges);
+    // Merge FontAwesome icons only if the file exists on disk to prevent crashes
+    std::string icon_font_path = "fonts/Font Awesome 6 Free-Solid-900.otf";
+    std::ifstream icon_file(icon_font_path);
+    if (icon_file.good()) {
+        static const ImWchar icons_ranges[] = { 0xe000, 0xf8ff, 0 };
+        ImFontConfig icons_config;
+        icons_config.MergeMode = true;
+        icons_config.PixelSnapH = true;
+        io.Fonts->AddFontFromFileTTF(icon_font_path.c_str(), 14.0f, &icons_config, icons_ranges);
+    } else {
+        std::cerr << "[AeroTerminal] Warning: " << icon_font_path << " not found. Icons will not render." << std::endl;
+    }
 
     // Start market data service and subscribe to initial charts
     auto& mds = MarketDataService::instance();
@@ -231,8 +242,17 @@ void WindowFrame::RenderBottomMenuBar()
     {
         if (ImGui::BeginMenuBar())
         {
+            static bool open_settings_popup = false;
+            static char api_key_buf[256] = "";
+            static char notebook_dir_buf[256] = "";
+
             if (ImGui::BeginMenu("Workspace"))
             {
+                if (ImGui::MenuItem("Settings")) {
+                    open_settings_popup = true;
+                }
+                ImGui::Separator();
+
                 if (ImGui::MenuItem("Save Layout")) {
                     open_save_popup = true;
                 }
@@ -256,6 +276,44 @@ void WindowFrame::RenderBottomMenuBar()
                     ImGui::LoadIniSettingsFromDisk("imgui.ini");
                 }
                 ImGui::EndMenu();
+            }
+
+            if (open_settings_popup) {
+                ImGui::OpenPopup("Application Settings");
+                strncpy(api_key_buf, ctx.gemini_api_key.c_str(), sizeof(api_key_buf));
+                strncpy(notebook_dir_buf, ctx.notebook_dir.c_str(), sizeof(notebook_dir_buf));
+                open_settings_popup = false;
+            }
+
+            if (ImGui::BeginPopupModal("Application Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("Saathi AI Assistant Settings:");
+                ImGui::InputText("Gemini API Key", api_key_buf, sizeof(api_key_buf), ImGuiInputTextFlags_Password);
+                ImGui::Separator();
+                ImGui::Spacing();
+                
+                ImGui::Text("Jupyter Notebook Settings:");
+                ImGui::InputText("Notebook Folder", notebook_dir_buf, sizeof(notebook_dir_buf));
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Default: storage/notebooks");
+                ImGui::Spacing();
+                
+                if (ImGui::Button("Save & Apply", ImVec2(120, 0))) {
+                    ctx.gemini_api_key = api_key_buf;
+                    std::string old_dir = ctx.notebook_dir;
+                    ctx.notebook_dir = notebook_dir_buf;
+                    ctx.SaveSettings();
+                    
+                    // Restart Jupyter if the directory was modified
+                    if (ctx.notebook_dir != old_dir) {
+                        ctx.RestartJupyterServer();
+                    }
+                    
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
 
             if (open_save_popup) {
@@ -294,6 +352,7 @@ void WindowFrame::RenderBottomMenuBar()
                 ImGui::MenuItem("Orderbook", nullptr, &ctx.show_orderbook);
                 ImGui::MenuItem("Trades Feed", nullptr, &ctx.show_trades);
                 ImGui::MenuItem("Market Screener", nullptr, &ctx.show_screener);
+                ImGui::MenuItem("Algorithmic Trading", nullptr, &ctx.show_algo);
                 ImGui::Separator();
                 
                 if (ImGui::BeginMenu("Add Chart"))
@@ -398,8 +457,7 @@ void WindowFrame::RenderUI()
     if (ctx.show_calendar)
         quantum::ui::RenderCalendarPanel(&ctx.show_calendar);
 
-    if (ctx.show_whiteboard)
-        quantum::ui::RenderWhiteboardPanel(&ctx.show_whiteboard);
+    quantum::ui::RenderWhiteboardPanel(&ctx.show_whiteboard);
 
     if (ctx.show_orderbook)
         quantum::ui::RenderOrderBookPanel(&ctx.show_orderbook);
@@ -409,12 +467,15 @@ void WindowFrame::RenderUI()
 
     if (ctx.show_screener)
         quantum::ui::RenderScreenerPanel(&ctx.show_screener);
+
+    quantum::ui::RenderAlgoTradingPanel(&ctx.show_algo);
 }
 
 void WindowFrame::Shutdown()
 {
     MarketDataService::instance().Stop();
     quantum::ui::ShutdownWhiteboardPanel();
+    quantum::ui::ShutdownAlgoTradingPanel();
     if (m_window)
     {
         ImGui_ImplOpenGL3_Shutdown();

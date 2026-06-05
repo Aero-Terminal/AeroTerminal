@@ -1,4 +1,5 @@
 #include "PanelWhiteboard.h"
+#include "tldraw_index_html.h"
 #include "core/AppContext.h"
 #include "core/json.hpp"
 #include "imgui.h"
@@ -94,7 +95,7 @@ static const char* g_tldraw_html = R"html(
 
 void RenderWhiteboardPanel(bool* p_open) {
     auto hide_webview = []() {
-        if (g_webview) {
+        if (g_webview && g_webview_visible) {
             g_webview->set_visible(false);
             g_webview_visible = false;
         }
@@ -142,7 +143,7 @@ void RenderWhiteboardPanel(bool* p_open) {
         // Initialize webview inside GLFW window as child HWND
         if (g_webview == nullptr && !g_webview_failed && ctx.main_window_handle != nullptr) {
             HWND parent = (HWND)ctx.main_window_handle;
-            g_webview = new webview::webview(true, &parent);
+            g_webview = new webview::webview(true, &parent, L"whiteboard");
             
             if (!g_webview->is_valid()) {
                 delete g_webview;
@@ -156,8 +157,8 @@ void RenderWhiteboardPanel(bool* p_open) {
                         if (args.is_array() && args.size() > 0) {
                             std::string snapshot_str = args[0].get<std::string>();
                             
-                            create_directory("storage");
-                            std::ofstream file("storage/canvas.json");
+                            create_directory(AppContext::instance().storage_dir);
+                            std::ofstream file(AppContext::instance().storage_dir + "/canvas.json");
                             if (file.is_open()) {
                                 file << snapshot_str;
                             }
@@ -170,7 +171,7 @@ void RenderWhiteboardPanel(bool* p_open) {
 
                 // Load initial snapshot from canvas.json
                 std::string initial_json = "{}";
-                std::ifstream file("storage/canvas.json");
+                std::ifstream file(AppContext::instance().storage_dir + "/canvas.json");
                 if (file.is_open()) {
                     std::stringstream buffer;
                     buffer << file.rdbuf();
@@ -189,9 +190,9 @@ void RenderWhiteboardPanel(bool* p_open) {
 
                 g_webview->init("window.initial_canvas_data = \"" + escaped_json + "\";");
 
-                // Load HTML from storage/tldraw_index.html, fallback to CDN HTML if missing
+                // Load HTML from storage/tldraw_index.html, fallback to embedded HTML
                 std::string html_content = "";
-                std::ifstream html_file("storage/tldraw_index.html");
+                std::ifstream html_file(AppContext::instance().storage_dir + "/tldraw_index.html");
                 if (html_file.is_open()) {
                     std::stringstream buffer;
                     buffer << html_file.rdbuf();
@@ -201,7 +202,9 @@ void RenderWhiteboardPanel(bool* p_open) {
                 if (!html_content.empty()) {
                     g_webview->set_html(html_content);
                 } else {
-                    g_webview->set_html(g_tldraw_html);
+                    // Convert embedded byte array to string and load it
+                    std::string embedded_html(reinterpret_cast<const char*>(g_tldraw_index_html), g_tldraw_index_html_len);
+                    g_webview->set_html(embedded_html);
                 }
             }
         }
@@ -226,8 +229,16 @@ void RenderWhiteboardPanel(bool* p_open) {
 
 
             g_webview->set_bounds(pt.x, pt.y, (int)w, final_h);
-            g_webview->set_visible(true);
-            g_webview_visible = true;
+            
+            // Hide the heavyweight WebView2 child window if any ImGui popup/menu is open
+            // to prevent it from clipping popups and dropdown menus.
+            if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup)) {
+                g_webview->set_visible(false);
+                g_webview_visible = false;
+            } else {
+                g_webview->set_visible(true);
+                g_webview_visible = true;
+            }
         }
     }
 
